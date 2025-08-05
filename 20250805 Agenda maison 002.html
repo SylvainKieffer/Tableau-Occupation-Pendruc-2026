@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calendrier Occupation Maison Secondaire</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 10px; background: #f4f4f4; }
+        #calendar { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; max-width: 100%; }
+        .day { padding: 10px; text-align: center; border: 1px solid #ccc; cursor: pointer; min-height: 50px; }
+        .weekend { background: #e0e0e0; }
+        .familyA { background: lightblue; }
+        .familyB { background: rgb(0, 255, 157); }
+        .school { border: 2px solid rgb(212, 85, 0); }
+        #stats, #annualStats { margin-top: 20px; padding: 10px; background: white; border: 1px solid #ccc; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        @media (max-width: 600px) { #calendar { grid-template-columns: repeat(7, 1fr); font-size: 12px; } .day { padding: 5px; min-height: 30px; } }
+    </style>
+</head>
+<body>
+    <h1>Calendrier Occupation - Maison 5 Chambres (2026)</h1>
+    <p>Cliquez sur un jour pour assigner : Bleu = Famille A, Rouge = Famille B, Blanc = Vide. Périodes scolaires en vert.</p>
+    
+    <select id="monthSelect" onchange="generateCalendar()">
+        <option value="0">Janvier</option><option value="1">Février</option><option value="2">Mars</option>
+        <option value="3">Avril</option><option value="4">Mai</option><option value="5">Juin</option>
+        <option value="6">Juillet</option><option value="7">Août</option><option value="8">Septembre</option>
+        <option value="9">Octobre</option><option value="10">Novembre</option><option value="11">Décembre</option>
+    </select>
+    <button onclick="clearAssignments()">Réinitialiser toutes les assignments</button>
+    
+    <div id="calendar"></div>
+    
+    <div id="stats">
+        <h2>Taux d'Occupation (pour le mois)</h2>
+        <p>Jours Famille A: <span id="daysA">0</span> (<span id="percentA">0%</span>)</p>
+        <p>Jours Famille B: <span id="daysB">0</span> (<span id="percentB">0%</span>)</p>
+        <p>Total Occupé: <span id="totalOccupied">0</span> / <span id="totalDays">0</span></p>
+    </div>
+    
+    <div id="annualStats">
+        <h2>Taux d'Occupation Annuel (2026)</h2>
+        <p>Jours Famille A: <span id="annualDaysA">0</span> (<span id="annualPercentA">0%</span>)</p>
+        <p>Jours Famille B: <span id="annualDaysB">0</span> (<span id="annualPercentB">0%</span>)</p>
+        <p>Total Occupé: <span id="annualTotalOccupied">0</span> / 365</p>
+    </div>
+    
+    <table id="tableur">
+        <thead><tr><th>Date</th><th>Famille</th><th>Scolaire</th></tr></thead>
+        <tbody></tbody>
+    </table>
+
+    <script>
+        const year = 2026;
+        const schoolPeriods = [  // Périodes de vacances scolaires pour 2026, Zone C (Paris) - Dates officielles ou estimées basées sur le calendrier français
+            {start: new Date(2026, 0, 1), end: new Date(2026, 0, 4)},  // Fin des vacances de Noël (du 20/12/2025 au 05/01/2026, partie en 2026)
+            {start: new Date(2026, 1, 21), end: new Date(2026, 2, 8)}, // Vacances d'hiver (07/02 au 23/02/2026)
+            {start: new Date(2026, 3, 18), end: new Date(2026, 4, 3)}, // Vacances de printemps (04/04 au 20/04/2026)
+            {start: new Date(2026, 6, 4), end: new Date(2026, 7, 31)}   // Vacances d'été (à partir du 04/07/2026 jusqu'au 31/08/2026, rentrée le 01/09)
+        ];
+        
+        let assignments = JSON.parse(localStorage.getItem('assignments')) || {};
+        
+        function isSchoolDay(date) {
+            return schoolPeriods.some(period => date >= period.start && date <= period.end);
+        }
+        
+        function updateAnnualStats() {
+            let daysA = 0, daysB = 0;
+            for (let key in assignments) {
+                if (assignments[key] === 'A') daysA++;
+                else if (assignments[key] === 'B') daysB++;
+            }
+            const totalOccupied = daysA + daysB;
+            const totalDays = 365; // 2026 n'est pas bissextile
+            document.getElementById('annualDaysA').textContent = daysA;
+            document.getElementById('annualDaysB').textContent = daysB;
+            document.getElementById('annualPercentA').textContent = ((daysA / totalDays) * 100).toFixed(1);
+            document.getElementById('annualPercentB').textContent = ((daysB / totalDays) * 100).toFixed(1);
+            document.getElementById('annualTotalOccupied').textContent = totalOccupied;
+        }
+        
+        function generateCalendar() {
+            const month = parseInt(document.getElementById('monthSelect').value);
+            const calendar = document.getElementById('calendar');
+            const tableBody = document.querySelector('#tableur tbody');
+            calendar.innerHTML = '';
+            tableBody.innerHTML = '';
+            
+            const firstDay = new Date(year, month, 1);
+            const lastDay = new Date(year, month + 1, 0);
+            const daysInMonth = lastDay.getDate();
+            
+            // Ajouter jours de la semaine
+            ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'].forEach(day => {
+                const header = document.createElement('div');
+                header.textContent = day;
+                header.style.fontWeight = 'bold';
+                calendar.appendChild(header);
+            });
+            
+            // Remplir les jours vides avant le 1er
+            for (let i = 0; i < firstDay.getDay(); i++) {
+                calendar.appendChild(document.createElement('div'));
+            }
+            
+            let daysA = 0, daysB = 0, totalOccupied = 0;
+            
+            for (let day = 1; day <= daysInMonth; day++) {
+                const date = new Date(year, month, day);
+                const dateKey = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                const div = document.createElement('div');
+                div.classList.add('day');
+                div.textContent = day;
+                if (date.getDay() === 0 || date.getDay() === 6) div.classList.add('weekend');
+                if (isSchoolDay(date)) div.classList.add('school');
+                
+                const assignment = assignments[dateKey] || '';
+                if (assignment === 'A') { div.classList.add('familyA'); daysA++; totalOccupied++; }
+                if (assignment === 'B') { div.classList.add('familyB'); daysB++; totalOccupied++; }
+                
+                div.onclick = () => {
+                    if (assignment === 'A') { assignments[dateKey] = 'B'; }
+                    else if (assignment === 'B') { delete assignments[dateKey]; }
+                    else { assignments[dateKey] = 'A'; }
+                    localStorage.setItem('assignments', JSON.stringify(assignments));
+                    generateCalendar();  // Rafraîchir
+                };
+                
+                calendar.appendChild(div);
+                
+                // Ajouter au tableur
+                const row = document.createElement('tr');
+                row.innerHTML = `<td>${dateKey}</td><td>${assignment || 'Vide'}</td><td>${isSchoolDay(date) ? 'Oui' : 'Non'}</td>`;
+                tableBody.appendChild(row);
+            }
+            
+            document.getElementById('daysA').textContent = daysA;
+            document.getElementById('daysB').textContent = daysB;
+            document.getElementById('percentA').textContent = ((daysA / daysInMonth) * 100).toFixed(1);
+            document.getElementById('percentB').textContent = ((daysB / daysInMonth) * 100).toFixed(1);
+            document.getElementById('totalOccupied').textContent = totalOccupied;
+            document.getElementById('totalDays').textContent = daysInMonth;
+            
+            updateAnnualStats();  // Mettre à jour les stats annuelles
+        }
+        
+        function clearAssignments() {
+            assignments = {};
+            localStorage.removeItem('assignments');
+            generateCalendar();
+        }
+        
+        generateCalendar();  // Initialiser
+    </script>
+</body>
+</html>
